@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Game Hantu - Hindari Penangkapan</title>
+  <style>
+    @keyframes pulse {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.1); opacity: 0.7; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+#roundInfo.pulse {
+  animation: pulse 0.6s ease;
+}
+
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background-image: url('background.jpg');
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      background-attachment: fixed;
+      min-height: 100vh;
+      color: #f1f1f1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    h1 {
+      margin-top: 20px;
+      font-size: 36px;
+      color: #2ecc71;
+    }
+    #info {
+      margin-top: 10px;
+      font-size: 20px;
+    }
+    #timer {
+      font-size: 36px;
+      margin: 10px 0;
+      display: flex;
+      gap: 10px;
+    }
+    .digit {
+      background: #111;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-family: monospace;
+      font-weight: bold;
+      font-size: 32px;
+      color: #0f0;
+      animation: flip 0.5s ease;
+    }
+    @keyframes flip {
+      from { transform: rotateX(90deg); opacity: 0; }
+      to   { transform: rotateX(0); opacity: 1; }
+    }
+    #grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+      grid-gap: 10px;
+      margin-top: 20px;
+      max-width: 90vw;
+    }
+    .room {
+      width: 80px;
+      height: 80px;
+      background-color: #444;
+      border-radius: 10px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      transition: background-color 0.2s;
+    }
+    .room.blue { background-color: #3498db; }
+    .room.green { background-color: #2ecc71; }
+    .room.orange { background-color: orange; }
+    .room.danger { background-color: red; }
+    .room.purple { background-color: purple; }
+    .room.yellow { background-color: yellow;  }
+    .room.cyan { background-color: cyan;  }
+    .room.pink { background-color: pink;  }
+    .room.lime { background-color: lime; }
+    .room.brown { background-color: brown; }
+    .room.gray { background-color: gray; }
+
+    #overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.85);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 24px;
+      z-index: 10;
+      text-align: center;
+      padding: 20px;
+    }
+    #overlay .emoji {
+      font-size: 80px;
+      margin-bottom: 20px;
+    }
+    button {
+      margin: 10px;
+      padding: 12px 24px;
+      font-size: 16px;
+      font-weight: bold;
+      border: none;
+      border-radius: 12px;
+      background-color: #27ae60;
+      color: white;
+      cursor: pointer;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+      transition: transform 0.1s ease;
+    }
+    button:hover {
+      transform: scale(1.05);
+    }
+    .nav-btns {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .nav-btns .blue { background-color: #3498db; }
+    .nav-btns .green { background-color: #2ecc71; }
+    .nav-btns .orange { background-color: orange; }
+    .nav-btns .purple { background-color: purple; }
+    .nav-btns .yellow { background-color: yellow;  }
+    .nav-btns .cyan { background-color: cyan; }
+    .nav-btns .pink { background-color: pink; }
+    .nav-btns .lime { background-color: lime; }
+    .nav-btns .brown { background-color: brown; }
+    .nav-btns .gray { background-color: gray; }
+
+  </style>
+  
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+  <audio id="clickSound" src="sounds/click.mp3" preload="auto"></audio>
+  <audio id="timerSound" src="timer-tick.mp3" preload="auto"></audio>
+  <audio id="dangerSound" src="sounds/danger-alert.mp3" preload="auto"></audio>
+
+</head>
+
+<body>
+  <h1>Hindari Hantu</h1>
+
+  <div id="menu">
+    <p>Pilih Mode:</p>
+    <button onclick="playClick(); startSolo()">Solo</button>
+    <button onclick="playClick(); showMultiplayerSetup()">Multiplayer</button>
+    <button onclick="playClick(); startSurvivalSetup()">Survival</button>
+  </div>
+
+  <div id="setup" style="display:none">
+    <p>Pilih Ukuran Kotak:</p>
+    <div>
+      <button onclick="playClick(); selectSize(4)">4 x 4</button>
+      <button onclick="playClick(); selectSize(5)">5 x 5</button>
+      <button onclick="playClick(); selectSize(7)">7 x 7</button>
+      <button onclick="playClick(); selectSize(10)">10 x 10</button>
+    </div>
+    <label>Jumlah Ronde: <input id="roundCount" type="number" value="7" min="1" max="20"></label><br>
+    <label id="playerCountLabel" style="display:none">Jumlah Pemain: <input id="playerCount" type="number" value="2" min="2" max="10">
+</label><br>
+    <label>Waktu Bersembunyi (detik): <input id="chooseTimeInput" type="number" value="15" min="5" max="60"></label><br>
+    <p id="nameGuide" style="display:none; margin-top:10px; font-style: italic;">Isi kolom nama pemain sesuai warna yang anda inginkan</p>
+    <div id="playerNames"></div>
+    <button onclick="playClick(); startGame()">Mulai Game</button>
+  </div>
+
+  <div id="info"></div>
+  <div id="roundInfo" style="margin-top: 5px; font-size: 22px; font-weight: bold;"></div>
+  <div id="timer"></div>
+  <div id="survivalScores" style="display:none; margin-top: 10px; font-size: 18px;"></div>
+
+  <div id="grid"></div>
+  <div class="nav-btns"></div>
+
+  <div id="overlay">
+    <div class="emoji">👻</div>
+    <div id="overlayMessage">Kamu ketahuan!</div>
+    <button onclick="playClick(); location.reload()">OK</button>
+  </div>
+
+
+  <script>
+
+  function playClick() {
+  const audio = document.getElementById("clickSound");
+  if (audio) {
+    audio.currentTime = 0;
+    audio.play();
+  }
+}
+
+  function playDangerSound() {
+  const sound = document.getElementById("dangerSound");
+  sound.currentTime = 0;
+  sound.play();
+}
+
+  function playTimerSound() {
+  const sound = document.getElementById("timerSound");
+  sound.currentTime = 0; // mulai dari awal
+  sound.play().catch(() => {}); // handle jika autoplay diblokir
+}
+
+
+  let isSurvival = false;
+    function startSurvivalSetup() {
+    isSurvival = true; // ➕
+    mode = "multi"; // karena survival mirip multiplayer
+    document.getElementById("menu").style.display = "none";
+    document.getElementById("setup").style.display = "block";
+    document.getElementById("playerCountLabel").style.display = "block";
+    document.getElementById("nameGuide").style.display = "block";
+    document.getElementById("roundCount").parentElement.style.display = "none"; // hide round input ➕
+    updateNameInputs();
+    document.getElementById("playerCount").addEventListener("input", updateNameInputs);
+  }
+
+
+
+function startGame() {
+  if (!isSurvival) {
+    maxRounds = +document.getElementById("roundCount").value;
+  } else {
+    maxRounds = Infinity;
+  }
+
+  chooseTime = +document.getElementById("chooseTimeInput").value * 1000;
+  players = (mode === "multi") ? +document.getElementById("playerCount").value : 1;
+  alive = Array(players).fill(true);
+  playerNames = [];
+
+  for (let i = 0; i < players; i++) {
+    const nameInput = document.getElementById(`name${i}`);
+    playerNames.push(nameInput ? nameInput.value : `Pemain ${i + 1}`);
+  }
+
+  // ✅ Letakkan setelah players diketahui
+  if (isSurvival) {
+    survivalScores = Array(players).fill(0);
+    document.getElementById("survivalScores").style.display = "block";
+    updateSurvivalScores();
+  }
+
+  selectedRooms = {};
+  round = 1;
+  grid.style.gridTemplateColumns = `repeat(${boxSize}, 80px)`;
+  setupGrid();
+  buildNavButtons();
+  startTurn();
+  document.getElementById("roundInfo").style.display = "block";
+
+  if (mode === "solo") {
+    document.getElementById("leaderboardPopup").style.display = "none";
+  }
+}
+
+
+function updateSurvivalScores() {
+  const div = document.getElementById("survivalScores");
+  div.innerHTML = "<strong>🏅 Skor Survival:</strong><br>" +
+  playerNames.map((name, i) =>
+    `<span style="color:${alive[i] ? 'lightgreen' : 'tomato'};font-weight:bold">
+      ${name}: ${survivalScores[i]} poin
+    </span>`
+  ).join("<br>");
+
+}
+
+
+
+  function updateRoundInfo() {
+    const roundDiv = document.getElementById("roundInfo");
+    if (isSurvival) {
+      roundDiv.textContent = `Survival - Ronde ${round}`; // ➕
+    } else {
+      roundDiv.textContent = `Ronde ${round} dari ${maxRounds}`;
+    }
+    roundDiv.classList.remove("pulse");
+    void roundDiv.offsetWidth;
+    roundDiv.classList.add("pulse");
+  }
+
+  function pickDangerRooms() {
+    const total = boxSize * boxSize;
+    let count;
+    if (isSurvival) {
+      count = Math.min(2 + Math.floor(round / 2), Math.floor(total * 0.6)); // ➕ makin banyak tiap 2 ronde
+    } else {
+      count = Math.min(2 + round - 1, 5);
+    }
+
+    const set = new Set();
+    while (set.size < count) {
+      set.add(Math.floor(Math.random() * total));
+    }
+    return [...set];
+  }
+
+  function startTurn() {
+    clearRooms();
+    updateRoundInfo();
+    info.textContent = "Pilih ruangan untuk bersembunyi";
+    startCountdown(chooseTime / 1000);
+
+    setTimeout(() => {
+      dangerRooms = pickDangerRooms();
+      showDanger();
+
+      updateRoundInfo();
+if (isSurvival) {
+  for (let i = 0; i < players; i++) {
+    if (alive[i]) survivalScores[i]++;
+  }
+  updateSurvivalScores();
+}
+
+      let eliminated = [];
+      for (let i = 0; i < players; i++) {
+        if (!alive[i]) continue;
+        const choice = selectedRooms[i];
+        if (dangerRooms.includes(choice)) {
+          alive[i] = false;
+          eliminated.push(playerNames[i]);
+          const nav = document.getElementById(`nav-user-${i}`);
+          if (nav) nav.style.display = "none";
+        }
+      }
+
+      if (eliminated.length) {
+        const message = (mode === "solo") ? "Kamu tertangkap!" : `${eliminated.join(", ")} tertangkap!`;
+        overlayMessage.textContent = message;
+        overlay.style.display = "flex";
+      }
+
+      setTimeout(() => {
+        overlay.style.display = "none";
+
+        if (!alive.includes(true)) {
+            overlayMessage.textContent = "Semua pemain tertangkap!";
+            overlay.style.display = "flex";
+          setTimeout(() => {
+            overlay.style.display = "none";
+              if (isSurvival) showSurvivalRanking();
+              }, 2000);
+                return;
+                  }
+
+
+        if (!isSurvival && round >= maxRounds) {
+          const survivors = alive.map((v, i) => v ? playerNames[i] : null).filter(Boolean);
+          const message = (mode === "solo")
+            ? "Selamat! Kamu berhasil lolos dari hantu!"
+            : `Selamat ${survivors.join(", ")} telah lolos dari hantu!`;
+
+          overlayMessage.textContent = message;
+          overlay.style.display = "flex";
+
+          confetti({ particleCount: 200, spread: 100, startVelocity: 40, angle: 90, origin: { y: 0.6 } });
+          confetti({ particleCount: 200, spread: 100, startVelocity: 40, angle: 90, origin: { y: 0.6 } });
+
+          setTimeout(() => {
+            overlay.style.display = "none";
+            if (mode !== "solo") {
+              showLeaderboard();
+            }
+          }, 2000);
+          return;
+        }
+
+        round++;
+        startTurn();
+      }, 1500);
+    }, chooseTime);
+  }
+
+
+    const grid = document.getElementById("grid");
+    const info = document.getElementById("info");
+    const timerDisplay = document.getElementById("timer");
+    const overlay = document.getElementById("overlay");
+    const overlayMessage = document.getElementById("overlayMessage");
+    const navBtns = document.querySelector(".nav-btns");
+    const playerNamesContainer = document.getElementById("playerNames");
+
+    let boxSize = 3, mode = "solo", maxRounds = 7, round = 1;
+    let players = 1, alive = [], currentPlayer = 0, chooseTime = 15000;
+    let rooms = [], selectedRooms = {}, dangerRooms = [], playerNames = [];
+    let survivalScores = [];
+
+    function playSound(id) {
+      const audio = document.getElementById(id);
+      if (audio) {
+        audio.currentTime = 0;
+        audio.play();
+      }
+    }
+
+    function selectSize(size) { boxSize = size; }
+
+    function startSolo() {
+      mode = "solo";
+      document.getElementById("menu").style.display = "none";
+      document.getElementById("setup").style.display = "block";
+      document.getElementById("playerCountLabel").style.display = "none";
+      document.getElementById("nameGuide").style.display = "none";
+      playerNamesContainer.innerHTML = "";
+    }
+
+    function showMultiplayerSetup() {
+      mode = "multi";
+      document.getElementById("menu").style.display = "none";
+      document.getElementById("setup").style.display = "block";
+      document.getElementById("playerCountLabel").style.display = "block";
+      document.getElementById("nameGuide").style.display = "block";
+      updateNameInputs();
+      handleRoomSizeVisibility();
+      document.getElementById("playerCount").addEventListener("input", updateNameInputs);
+    }
+
+    function updateNameInputs() {
+
+function handleRoomSizeVisibility() {
+  const playerCount = +document.getElementById("playerCount").value;
+  const buttons = document.querySelectorAll('#setup button');
+  buttons.forEach(btn => {
+    const text = btn.textContent.trim();
+    if (text.endsWith("x 3") || text.endsWith("x 4") || text === "3 x 3" || text === "4 x 4") {
+      const shouldHide = playerCount > 4;
+      btn.style.display = shouldHide ? "none" : "inline-block";
+    }
+  });
+}
+
+      const count = +document.getElementById("playerCount").value;
+      const colors = ["Biru", "Hijau", "Oranye", "Ungu", "Kuning", "Cyan", "Pink", "Lime", "Cokelat", "Abu-abu"];
+      playerNamesContainer.innerHTML = "";
+      for (let i = 0; i < count; i++) {
+        playerNamesContainer.innerHTML += `<label style="display:block;margin:4px 0;">Pemain warna ${colors[i]}: <input id="name${i}" value="Pemain ${i+1}"></label>`;
+      }
+    }
+
+
+
+    function setupGrid() {
+      grid.innerHTML = "";
+      rooms = [];
+      for (let i = 0; i < boxSize * boxSize; i++) {
+        const room = document.createElement("div");
+        room.className = "room";
+        room.textContent = i + 1;
+        room.onclick = () => selectRoom(i);
+        grid.appendChild(room);
+        rooms.push(room);
+      }
+    }
+
+    function buildNavButtons() {
+      navBtns.innerHTML = "";
+      if (mode === "multi") {
+        for (let i = 0; i < players; i++) {
+          const btn = document.createElement("button");
+          btn.textContent = playerNames[i];
+          btn.className = getColorClass(i);
+          btn.id = `nav-user-${i}`;
+          btn.onclick = () => currentPlayer = i;
+          navBtns.appendChild(btn);
+        }
+      }
+    }
+
+    function getColorClass(i) {
+      return ["blue", "green", "orange", "purple", "yellow", "cyan", "pink", "lime", "brown", "gray"][i];
+    }
+
+    function selectRoom(i) {
+      if (!alive[currentPlayer]) return;
+      const prev = selectedRooms[currentPlayer];
+      if (prev !== undefined) rooms[prev].classList.remove(getColorClass(currentPlayer));
+      selectedRooms[currentPlayer] = i;
+      rooms[i].classList.add(getColorClass(currentPlayer));
+    }
+
+    function clearRooms() {
+      rooms.forEach(r => r.className = "room");
+      selectedRooms = {};
+    }
+
+
+    function showDanger() {
+      playDangerSound();
+      dangerRooms.forEach(i => rooms[i].classList.add("danger"));
+    }
+
+
+let countdownInterval;
+
+function startCountdown(seconds) {
+  clearInterval(countdownInterval);
+  let remaining = seconds;
+  updateTimerDisplay(remaining);
+
+  countdownInterval = setInterval(() => {
+    playTimerSound(); 
+    remaining--;
+    updateTimerDisplay(remaining);
+    if (remaining <= 0) clearInterval(countdownInterval);
+  }, 1000);
+}
+
+
+function updateTimerDisplay(secs) {
+  let m = Math.floor(secs / 60).toString().padStart(2, '0');
+  let s = (secs % 60).toString().padStart(2, '0');
+  timerDisplay.innerHTML = `
+    <div class="digit">${m[0]}</div>
+    <div class="digit">${m[1]}</div>
+    <div>:</div>
+    <div class="digit">${s[0]}</div>
+    <div class="digit">${s[1]}</div>
+  `;
+}
+
+    function showLeaderboard() {
+  const list = document.getElementById("leaderboardList");
+  list.innerHTML = "";
+
+  const results = playerNames.map((name, i) => ({
+    name,
+    status: alive[i] ? " Lolos" : ` Tersingkir di ronde ${round}`
+  }));
+
+  results.forEach(player => {
+    const li = document.createElement("li");
+    li.textContent = `${player.name} - ${player.status}`;
+    list.appendChild(li);
+  });
+
+  document.getElementById("leaderboardPopup").style.display = "flex";
+}
+
+function showSurvivalRanking() {
+  const sorted = playerNames
+    .map((name, i) => ({ name, score: survivalScores[i] }))
+    .sort((a, b) => b.score - a.score);
+
+  const list = document.getElementById("leaderboardList");
+  list.innerHTML = "";
+
+  sorted.forEach((player, rank) => {
+    const li = document.createElement("li");
+    li.innerHTML = `<strong>#${rank + 1}</strong> ${player.name} - ${player.score} poin`;
+    list.appendChild(li);
+  });
+
+  document.getElementById("leaderboardPopup").style.display = "flex";
+
+  // Tambahkan confetti hanya untuk juara 1
+  if (sorted.length > 0) {
+    celebrateChampion(sorted[0].name);
+  }
+}
+
+
+function celebrateChampion(name) {
+  // Tampilkan confetti 3x
+  for (let i = 0; i < 3; i++) {
+    setTimeout(() => {
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.6 },
+      });
+    }, i * 600);
+  }
+
+  // tampilkan pesan selamat
+  overlayMessage.textContent = `🎉 Selamat ${name}, kamu juara! 🎉`;
+  overlay.style.display = "flex";
+  setTimeout(() => {
+    overlay.style.display = "none";
+  }, 3000);
+}
+
+
+
+  </script>
+<div id="leaderboardPopup" style="display:none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+  background: rgba(0,0,0,0.9); z-index: 20; color: white; padding: 40px; box-sizing: border-box;
+  flex-direction: column; align-items: center; justify-content: center; text-align: center;">
+  <h2>🏆 Leaderboard</h2>
+  <ul id="leaderboardList" style="list-style: none; padding: 0; font-size: 20px;"></ul>
+  <button onclick="playClick(); location.reload()">Main Lagi</button>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+</body>
+</html>
